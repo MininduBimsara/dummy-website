@@ -15,11 +15,12 @@ export default function CanvasSequence({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<Array<HTMLImageElement | undefined>>([]);
   const loadedCountRef = useRef(0);
+  const loadTextRef = useRef<HTMLDivElement>(null);
   const [imagesLoaded, setImagesLoaded] = useState(0);
 
   const drawImageCover = useCallback(
     (img: HTMLImageElement, canvas: HTMLCanvasElement) => {
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) return;
 
       const canvasRatio = canvas.width / canvas.height;
@@ -39,8 +40,6 @@ export default function CanvasSequence({
         offsetY = 0;
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Draw background color to blend seamlessly if it's not a perfect fit or if transparent
       ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
@@ -71,11 +70,12 @@ export default function CanvasSequence({
         imagesRef.current[index] = img;
         loadedCountRef.current += 1;
 
-        if (
-          loadedCountRef.current === frameCount ||
-          loadedCountRef.current % 4 === 0
-        ) {
+        if (loadedCountRef.current === frameCount) {
           setImagesLoaded(loadedCountRef.current);
+        } else if (loadedCountRef.current % 4 === 0) {
+          if (loadTextRef.current) {
+            loadTextRef.current.innerText = `SYSTEM INITIALIZING... ${Math.round((loadedCountRef.current / frameCount) * 100)}%`;
+          }
         }
 
         if (index === 0 && canvasRef.current) {
@@ -184,6 +184,8 @@ export default function CanvasSequence({
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [resizeCanvas]);
 
+  const rafRef = useRef<number | null>(null);
+
   useMotionValueEvent(progress, "change", (latest) => {
     if (!canvasRef.current) return;
 
@@ -194,15 +196,22 @@ export default function CanvasSequence({
 
     warmFramesAround(frameIndex);
 
-    requestAnimationFrame(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = requestAnimationFrame(() => {
       drawFrame(frameIndex);
+      rafRef.current = null;
     });
   });
 
   return (
     <div className="relative w-full h-full bg-[#000000]">
       {imagesLoaded < frameCount && (
-        <div className="absolute inset-0 flex items-center justify-center text-white/40 z-10 pointer-events-none transition-opacity duration-500 font-mono text-sm tracking-widest backdrop-blur-sm">
+        <div
+          ref={loadTextRef}
+          className="absolute inset-0 flex items-center justify-center text-white/40 z-10 pointer-events-none transition-opacity duration-500 font-mono text-sm tracking-widest backdrop-blur-sm"
+        >
           SYSTEM INITIALIZING... {Math.round((imagesLoaded / frameCount) * 100)}
           %
         </div>

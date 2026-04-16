@@ -11,9 +11,10 @@ interface CanvasSequenceProps {
 export default function CanvasSequence({
   progress,
   frameCount,
-}: CanvasSequenceProps) {
+}: Readonly<CanvasSequenceProps>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [images, setImages] = useState<HTMLImageElement[]>([]);
+  const imagesRef = useRef<Array<HTMLImageElement | undefined>>([]);
+  const loadedCountRef = useRef(0);
   const [imagesLoaded, setImagesLoaded] = useState(0);
 
   const drawImageCover = useCallback(
@@ -47,40 +48,124 @@ export default function CanvasSequence({
     [],
   );
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadedImages: HTMLImageElement[] = [];
-    let loadedCount = 0;
+  const loadFrame = useCallback(
+    (index: number, highPriority = false) => {
+      if (index < 0 || index >= frameCount) {
+        return;
+      }
 
-    for (let i = 1; i <= frameCount; i++) {
-      const img = new window.Image();
-      const paddedIndex = i.toString().padStart(3, "0");
+      if (imagesRef.current[index]) {
+        return;
+      }
+
+      const img = new globalThis.Image();
+      img.decoding = "async";
+      if (highPriority) {
+        img.fetchPriority = "high";
+      }
+
+      const paddedIndex = (index + 1).toString().padStart(3, "0");
       img.src = `/frames/ezgif-frame-${paddedIndex}.png`;
+
       img.onload = () => {
-        if (!isMounted) return;
-        loadedCount++;
-        setImagesLoaded(loadedCount);
-        // initial draw when the first frame loads
-        if (i === 1 && canvasRef.current) {
+        imagesRef.current[index] = img;
+        loadedCountRef.current += 1;
+
+        if (
+          loadedCountRef.current === frameCount ||
+          loadedCountRef.current % 4 === 0
+        ) {
+          setImagesLoaded(loadedCountRef.current);
+        }
+
+        if (index === 0 && canvasRef.current) {
           drawImageCover(img, canvasRef.current);
         }
       };
-      loadedImages.push(img);
-    }
-    if (isMounted) {
-      setImages(loadedImages);
-    }
+    },
+    [drawImageCover, frameCount],
+  );
 
-    return () => {
-      isMounted = false;
-      for (const img of loadedImages) {
-        img.onload = null;
+  const drawFrame = useCallback(
+    (frameIndex: number) => {
+      if (!canvasRef.current) {
+        return;
+      }
+
+      const img = imagesRef.current[frameIndex];
+      if (!img?.complete) {
+        return;
+      }
+
+      drawImageCover(img, canvasRef.current);
+    },
+    [drawImageCover],
+  );
+
+  const warmFramesAround = useCallback(
+    (frameIndex: number) => {
+      const preloadRadius = 8;
+      for (
+        let i = frameIndex - preloadRadius;
+        i <= frameIndex + preloadRadius;
+        i++
+      ) {
+        if (i === frameIndex) {
+          loadFrame(i, true);
+        } else {
+          loadFrame(i);
+        }
+      }
+    },
+    [loadFrame],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    imagesRef.current = new Array(frameCount);
+    loadedCountRef.current = 0;
+
+    // Ensure first frame appears ASAP, then stream the rest in small batches.
+    loadFrame(0, true);
+
+    let nextIndex = 1;
+    const queueBackgroundBatch = () => {
+      if (cancelled) {
+        return;
+      }
+
+      let loadedInBatch = 0;
+      while (nextIndex < frameCount && loadedInBatch < 4) {
+        loadFrame(nextIndex);
+        nextIndex += 1;
+        loadedInBatch += 1;
+      }
+
+      if (nextIndex < frameCount) {
+        timer = globalThis.setTimeout(queueBackgroundBatch, 80);
       }
     };
-  }, [drawImageCover, frameCount]);
+
+    timer = globalThis.setTimeout(queueBackgroundBatch, 200);
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+      for (const img of imagesRef.current) {
+        if (img) {
+          img.onload = null;
+        }
+      }
+      imagesRef.current = [];
+    };
+  }, [frameCount, loadFrame]);
 
   const resizeCanvas = useCallback(() => {
-    if (canvasRef.current && canvasRef.current.parentElement) {
+    if (canvasRef.current?.parentElement) {
       // Use offsetWidth and offsetHeight for High DPI devices if needed
       canvasRef.current.width = canvasRef.current.parentElement.clientWidth;
       canvasRef.current.height = canvasRef.current.parentElement.clientHeight;
@@ -89,11 +174,9 @@ export default function CanvasSequence({
         0,
         Math.min(frameCount - 1, Math.floor(progress.get() * frameCount)),
       );
-      if (images[frameIndex] && images[frameIndex].complete) {
-        drawImageCover(images[frameIndex], canvasRef.current);
-      }
+      drawFrame(frameIndex);
     }
-  }, [drawImageCover, frameCount, images, progress]);
+  }, [drawFrame, frameCount, progress]);
 
   useEffect(() => {
     resizeCanvas();
@@ -102,21 +185,18 @@ export default function CanvasSequence({
   }, [resizeCanvas]);
 
   useMotionValueEvent(progress, "change", (latest) => {
-    if (images.length === 0 || !canvasRef.current) return;
+    if (!canvasRef.current) return;
 
     const frameIndex = Math.max(
       0,
       Math.min(frameCount - 1, Math.floor(latest * (frameCount - 1))),
     );
 
-    const img = images[frameIndex];
-    if (img && img.complete) {
-      requestAnimationFrame(() => {
-        if (canvasRef.current) {
-          drawImageCover(img, canvasRef.current);
-        }
-      });
-    }
+    warmFramesAround(frameIndex);
+
+    requestAnimationFrame(() => {
+      drawFrame(frameIndex);
+    });
   });
 
   return (

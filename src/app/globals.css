@@ -1,35 +1,136 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  --foreground: rgba(255, 255, 255, 0.9);
+  --color-bg: #050608;
+  --color-text: rgba(247, 249, 255, 0.93);
+  --color-accent: #b6ff4f;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --font-sans: var(--font-sans);
 }
 
 html {
   scroll-behavior: smooth;
-  background-color: var(--background);
+  background-color: var(--color-bg);
 }
 
 body {
   min-height: 100vh;
-  color: var(--foreground);
+  color: var(--color-text);
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 * {
   box-sizing: border-box;
 }
 
-::selection {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+a {
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
+::selection {
+  background: rgba(182, 255, 79, 0.45);
+  color: #081001;
+}
+
+.site-atmosphere {
+  background:
+    radial-gradient(
+      circle at 15% 15%,
+      rgba(182, 255, 79, 0.12),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(49, 104, 255, 0.18),
+      transparent 36%
+    ),
+    linear-gradient(180deg, #06070b 0%, #050608 45%, #040406 100%);
+}
+
+.hero-halo {
+  position: absolute;
+  width: min(70vw, 760px);
+  aspect-ratio: 1/1;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(182, 255, 79, 0.25) 0%,
+    rgba(182, 255, 79, 0.05) 35%,
+    transparent 70%
+  );
+  filter: blur(24px);
+  animation: drift 10s ease-in-out infinite;
+}
+
+.site-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02)
+  );
+  padding: 1.4rem;
+  backdrop-filter: blur(8px);
+}
+
+.spec-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 0.65rem;
+}
+
+.site-cta {
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(
+      circle at 20% 15%,
+      rgba(182, 255, 79, 0.16),
+      transparent 32%
+    ),
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.02)
+    );
+  padding: 2.5rem 1.2rem;
+  text-align: center;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, 14px, 0) scale(1.02);
+  }
+}
+
+@media (min-width: 768px) {
+  .site-card {
+    padding: 1.8rem;
+  }
+
+  .site-cta {
+    padding: 3.6rem 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-halo {
+    animation: none;
+  }
+}
